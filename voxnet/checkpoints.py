@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 
 from path import Path
+import time
 
 import lasagne
 
@@ -23,12 +24,20 @@ def save_weights(fname, l_out, metadata=None):
     # try to avoid half-written files
     fname = Path(fname)
     if fname.exists():
-        tmp_fname = Path(fname.stripext() + '.tmp.npz') # TODO yes, this is a hack
-        np.savez_compressed(str(tmp_fname), **param_dict)
-        tmp_fname.rename(fname)
-    else:
-        np.savez_compressed(str(fname), **param_dict)
-
+        file_in_use = True
+        try_num = 0
+        while file_in_use and try_num < 5:
+            try:
+                _ = np.load(fname)
+                _.close()
+                file_in_use = False
+            except:
+                try_num += 1
+                time.sleep(try_num)
+                logging.warning('file {} in use, waiting...{}'.format(fname,try_num))
+                
+    np.savez_compressed(str(fname), **param_dict)
+    logging.info('weights saved to file {}'.format((fname,)))
 
 def load_weights(fname, l_out):
     params = lasagne.layers.get_all_params(l_out)
