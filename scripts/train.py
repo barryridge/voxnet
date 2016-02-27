@@ -161,19 +161,20 @@ def main(args):
                     logging.info('decreasing learning rate from {} to {}'.format(lr, new_lr))
                     tvars['learning_rate'].set_value(np.float32(new_lr))
             if itr-last_checkpoint_itr > cfg['checkpoint_every_nth']:
-                voxnet.checkpoints.save_weights('weights.npz', model['l_out'],
+                voxnet.checkpoints.save_weights(args.weights_fname, model['l_out'],
                                                 {'itr': itr, 'ts': time.time()})
                 last_checkpoint_itr = itr
 
 
     logging.info('training done')
-    voxnet.checkpoints.save_weights('weights.npz', model['l_out'],
+    voxnet.checkpoints.save_weights(args.weights_fname, model['l_out'],
                                     {'itr': itr, 'ts': time.time()})
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('config_path', type=Path, help='config .py file')
     parser.add_argument('training_fname', type=Path, help='training .tar file')
+    parser.add_argument('--weights-fname', type=Path, default='weights.npz')
     parser.add_argument('--metrics-fname', type=Path, default='metrics.jsonl', help='name of metrics file')
     args = parser.parse_args()
     main(args)
