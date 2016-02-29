@@ -34,31 +34,33 @@ def set_matplotlib_params():
 def main(args):
 
     set_matplotlib_params()
-
-    train_result = np.load(args.train_acc_fname)
-    y_true = train_result['ygnd']
-    y_pred = train_result['yhat']
-    train_scores = {
-        'accuracy':metrics.accuracy_score(y_true, y_pred),
-        'precision':metrics.precision_score(y_true, y_pred),
-        'confusion matrix': metrics.confusion_matrix(y_true, y_pred)/float(len(y_true)),
-        'sample size':len(y_pred)
-        }
+    if args.train_acc_fname is not None:
+        train_result = np.load(args.train_acc_fname)
+        y_true = train_result['ygnd']
+        y_pred = train_result['yhat']
+        train_scores = {
+            'accuracy':metrics.accuracy_score(y_true, y_pred),
+            'precision':metrics.precision_score(y_true, y_pred),
+            'confusion matrix': metrics.confusion_matrix(y_true, y_pred)/float(len(y_true)),
+            'sample size':len(y_pred)
+            }
         
-    test_result = np.load(args.test_acc_fname)
-    y_true = test_result['ygnd']
-    y_pred = test_result['yhat']
-    test_scores = {
-        'accuracy':metrics.accuracy_score(y_true, y_pred),
-        'precision':metrics.precision_score(y_true, y_pred),
-        'confusion matrix': metrics.confusion_matrix(y_true, y_pred)/float(len(y_true)),
-        'sample size':len(y_pred)
-        }
+    if args.test_acc_fname is not None:
+        test_result = np.load(args.test_acc_fname)
+        y_true = test_result['ygnd']
+        y_pred = test_result['yhat']
+        test_scores = {
+            'accuracy':metrics.accuracy_score(y_true, y_pred),
+            'precision':metrics.precision_score(y_true, y_pred),
+            'confusion matrix': metrics.confusion_matrix(y_true, y_pred)/float(len(y_true)),
+            'sample size':len(y_pred)
+            }
         
     recs = list(voxnet.metrics_logging.read_records(args.metrics_fname))
 
     #stamps = [np.datetime64(r['_stamp']) for r in recs]
-    stamps = [r['_stamp'] for r in recs]
+    #stamps = [r['_stamp'] for r in recs]
+    stamps = [range(len(recs))]
     df = pd.DataFrame(recs, index=stamps)
     df['loss'] = df['loss'].astype(np.float)
     #df = df.sort_index()
@@ -103,29 +105,31 @@ def main(args):
         pl.savefig(sio, format='svg')
         page.write(sio.getvalue())
         
-        page.write('<h1>Testing report</h1>')
-        page.write('<p>sample size {}</p>'.format(train_scores['sample size']))
-        page.write('<p>accuracy {}</p>'.format(train_scores['accuracy']))
-        fig = pl.figure()
-        pl.matshow(train_scores['confusion matrix'])
-        pl.colorbar()    
-        pl.xlabel('Predicted')
-        pl.ylabel('Ground')
-        sio = StringIO.StringIO()
-        pl.savefig(sio, format='svg')
-        page.write(sio.getvalue())
+        if args.train_acc_fname is not None:
+            page.write('<h1>Train report</h1>')
+            page.write('<p>sample size {}</p>'.format(train_scores['sample size']))
+            page.write('<p>accuracy {}</p>'.format(train_scores['accuracy']))
+            fig = pl.figure()
+            pl.matshow(train_scores['confusion matrix'])
+            pl.colorbar()    
+            pl.xlabel('Predicted')
+            pl.ylabel('Ground')
+            sio = StringIO.StringIO()
+            pl.savefig(sio, format='svg')
+            page.write(sio.getvalue())
         
-        page.write('<h1>Training report</h1>')
-        page.write('<p>sample size {}</p>'.format(test_scores['sample size']))
-        page.write('<p>accuracy {}</p>'.format(test_scores['accuracy']))
-        fig = pl.figure()
-        pl.matshow(test_scores['confusion matrix'])
-        pl.colorbar()    
-        pl.xlabel('Predicted')
-        pl.ylabel('Ground')
-        sio = StringIO.StringIO()
-        pl.savefig(sio, format='svg')
-        page.write(sio.getvalue())        
+        if args.test_acc_fname is not None:
+            page.write('<h1>Test report</h1>')
+            page.write('<p>sample size {}</p>'.format(test_scores['sample size']))
+            page.write('<p>accuracy {}</p>'.format(test_scores['accuracy']))
+            fig = pl.figure()
+            pl.matshow(test_scores['confusion matrix'])
+            pl.colorbar()    
+            pl.xlabel('Predicted')
+            pl.ylabel('Ground')
+            sio = StringIO.StringIO()
+            pl.savefig(sio, format='svg')
+            page.write(sio.getvalue())        
         
         page.write('</body></html>')
         
