@@ -126,11 +126,11 @@ def data_loader(cfg, fname):
         yield (2.0*xc - 1.0, np.asarray(yc, dtype=np.float32))
 
 class args:
-    args.training_fname = 'shapenet10_train.tar'
+    training_fname = 'shapenet10_train.tar'
     metrics_fname = 'metrics.jsonl'
     
 def f(params):
-    
+    args = args()
     lr_schedule = { 0: params['lr_0'],
                     60000: params['lr_60k'],
                     400000: params['lr_400k'],
