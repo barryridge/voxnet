@@ -265,16 +265,16 @@ if __name__=='__main__':
    
 
     fspace = {
-        'lr_0': hp.uniform('lr_0', 0.0001, 0.1),
-        'lr_60k': hp.uniform('lr_60k', 0.0001, 0.1),
-        'lr_400k': hp.uniform('lr_400k', 0.0001, 0.1),
-        'lr_600k': hp.uniform('lr_600k', 0.0001, 0.1),
-        'reg': hp.unifornm('reg',0.0001,0.01),
-        'momentum': hp.unifornm('momentum',0.9,0.1),
-        'max_epochs': hp.choice('max_epochs',range(20,80)),
-        'drop1p': hp.uniform('drop1p',0.9,0.1),
-        'drop2p': hp.uniform('drop2p',0.9,0.1),
-        'drop3p': hp.uniform('drop3p',0.9,0.1),
+        'lr_0': hp.uniformn('lr_0', 0.0001, 0.1),
+        'lr_60k': hp.uniformn('lr_60k', 0.0001, 0.1),
+        'lr_400k': hp.uniformn('lr_400k', 0.0001, 0.1),
+        'lr_600k': hp.uniformn('lr_600k', 0.0001, 0.1),
+        'reg': hp.unifornmn('reg',0.0001,0.01),
+        'momentum': hp.unifornmn('momentum',0.9,0.1),
+        'max_epochs': hp.choice('max_epochs',range(20,80,5)),
+        'drop1p': hp.uniformn('drop1p',0.9,0.1),
+        'drop2p': hp.uniformn('drop2p',0.9,0.1),
+        'drop3p': hp.uniformn('drop3p',0.9,0.1),
     }
 
     trials = Trials()
