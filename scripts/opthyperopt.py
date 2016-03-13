@@ -125,7 +125,10 @@ def data_loader(cfg, fname):
         xc = jitter_chunk(xc, cfg)
         yield (2.0*xc - 1.0, np.asarray(yc, dtype=np.float32))
 
-        
+class args:
+    args.training_fname = 'shapenet10_train.tar'
+    metrics_fname = 'metrics.jsonl'
+    
 def f(params):
     
     lr_schedule = { 0: params['lr_0'],
@@ -269,9 +272,9 @@ if __name__=='__main__':
         'reg': hp.unifornm('reg',0.0001,0.01),
         'momentum': hp.unifornm('momentum',0.9,0.1),
         'max_epochs': hp.choice('max_epochs',range(20,80)),
-        'drop1p': hp.unifornm('drop1p',0.9,0.1),
-        'drop2p': hp.unifornm('drop2p',0.9,0.1),
-        'drop3p': hp.unifornm('drop3p',0.9,0.1),
+        'drop1p': hp.uniform('drop1p',0.9,0.1),
+        'drop2p': hp.uniform('drop2p',0.9,0.1),
+        'drop3p': hp.uniform('drop3p',0.9,0.1),
     }
 
     trials = Trials()
