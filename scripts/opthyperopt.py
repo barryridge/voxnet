@@ -128,9 +128,11 @@ def data_loader(cfg, fname):
 class args:
     training_fname = 'shapenet10_train.tar'
     metrics_fname = 'metrics.jsonl'
+    weights_fname = 'weights.npz'
     
 def f(params):
-
+    for k in sorted(list(params.keys())):
+        print(k,params[k])
     lr_schedule = { 0: params['lr_0'],
                     60000: params['lr_60k'],
                     400000: params['lr_400k'],
@@ -151,7 +153,7 @@ def f(params):
            'n_rotations' : 12,
            'checkpoint_every_nth' : 4000,
            }
-
+    
 
     dims, n_channels, n_classes = tuple(cfg['dims']), cfg['n_channels'], cfg['n_classes']
     shape = (None, n_channels)+dims
@@ -240,7 +242,7 @@ def f(params):
             loss, acc = float(np.mean(lvs)), float(np.mean(acc))
             logging.info('epoch: {}, itr: {}, loss: {}, acc: {}'.format(epoch, itr, loss, acc))
             mlog.log(epoch=epoch, itr=itr, loss=loss, acc=acc)
-
+            
             if isinstance(cfg['learning_rate'], dict) and itr > 0:
                 keys = sorted(cfg['learning_rate'].keys())
                 new_lr = cfg['learning_rate'][keys[np.searchsorted(keys, itr)-1]]
@@ -265,13 +267,13 @@ if __name__=='__main__':
    
 
     fspace = {
-        'lr_0': hp.uniform('lr_0', 0.0001, 0.1),
+        'lr_0': hp.uniform('lr_0', 0.0001, 0.001),
         'lr_60k': hp.uniform('lr_60k', 0.0001, 0.1),
         'lr_400k': hp.uniform('lr_400k', 0.0001, 0.1),
         'lr_600k': hp.uniform('lr_600k', 0.0001, 0.1),
         'reg': hp.uniform('reg',0.0001,0.01),
         'momentum': hp.uniform('momentum',0.9,0.1),
-        'max_epochs': hp.choice('max_epochs',range(5,10,2)),
+        'max_epochs': hp.choice('max_epochs',range(2,4,2)),
         'drop1p': hp.uniform('drop1p',0.9,0.1),
         'drop2p': hp.uniform('drop2p',0.9,0.1),
         'drop3p': hp.uniform('drop3p',0.9,0.1),
