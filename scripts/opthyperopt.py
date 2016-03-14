@@ -5,6 +5,7 @@ import argparse
 import imp
 import time
 import logging
+import traceback
 
 import numpy as np
 from path import Path
@@ -19,7 +20,7 @@ import numpy as np
 import lasagne
 import lasagne.layers
         
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
+from hyperopt import fmin, tpe, hp, STATUS_OK, Trials, STATUS_FAIL
 
 def make_training_functions(cfg, model):
     l_out = model['l_out']
@@ -98,18 +99,24 @@ def jitter_chunk(src, cfg):
             dst = np.roll(dst, shift, axis+2)
     return dst
 
-def data_loader(cfg, fname):
+def data_loader(cfg, fname,lim=np.inf):
 
     dims = cfg['dims']
     chunk_size = cfg['batch_size']*cfg['batches_per_chunk']
     xc = np.zeros((chunk_size, cfg['n_channels'],)+dims, dtype=np.float32)
     reader = npytar.NpyTarReader(fname)
     yc = []
+    _debug_c = 0#debug
     for ix, (x, name) in enumerate(reader):
+        if _debug_c > lim:
+            yc = []
+            xc.fill(0)        
+            break
         cix = ix % chunk_size
         xc[cix] = x.astype(np.float32)
         yc.append(int(name.split('.')[0])-1)
         if len(yc) == chunk_size:
+            _debug_c+=1
             xc = jitter_chunk(xc, cfg)
             yield (2.0*xc - 1.0, np.asarray(yc, dtype=np.float32))
             yc = []
@@ -131,154 +138,163 @@ class args:
     weights_fname = 'weights.npz'
     
 def f(params):
-    for k in sorted(list(params.keys())):
-        print(k,params[k])
-    lr_schedule = { 0: params['lr_0'],
-                    60000: params['lr_60k'],
-                    400000: params['lr_400k'],
-                    600000: params['lr_600k'],
-                    }
+    try:
+        for k in sorted(list(params.keys())):
+            print(k,params[k])
+        lr_schedule = { 0: params['lr_0'],
+                        60000: params['lr_60k'],
+                        400000: params['lr_400k'],
+                        600000: params['lr_600k'],
+                        }
 
-    cfg = {'batch_size' : 32,
-           'learning_rate' : lr_schedule,
-           'reg' : params['reg'],
-           'momentum' : params['momentum'],
-           'dims' : (32, 32, 32),
-           'n_channels' : 1,
-           'n_classes' : 10,
-           'batches_per_chunk': 64,
-           'max_epochs' : params['max_epochs'],
-           'max_jitter_ij' : 2,
-           'max_jitter_k' : 2,
-           'n_rotations' : 12,
-           'checkpoint_every_nth' : 4000,
-           }
-    
+        cfg = {'batch_size' : 32,
+               'learning_rate' : lr_schedule,
+               'reg' : params['reg'],
+               'momentum' : params['momentum'],
+               'dims' : (32, 32, 32),
+               'n_channels' : 1,
+               'n_classes' : 10,
+               'batches_per_chunk': 64,
+               'max_epochs' : params['max_epochs'],
+               'max_jitter_ij' : 2,
+               'max_jitter_k' : 2,
+               'n_rotations' : 12,
+               'checkpoint_every_nth' : 4000,
+               }
+        
 
-    dims, n_channels, n_classes = tuple(cfg['dims']), cfg['n_channels'], cfg['n_classes']
-    shape = (None, n_channels)+dims
+        dims, n_channels, n_classes = tuple(cfg['dims']), cfg['n_channels'], cfg['n_classes']
+        shape = (None, n_channels)+dims
 
-    l_in = lasagne.layers.InputLayer(shape=shape)
-    l_conv1 = voxnet.layers.Conv3dMMLayer(
-            input_layer = l_in,
-            num_filters = 32,
-            filter_size = [5,5,5],
+        l_in = lasagne.layers.InputLayer(shape=shape)
+        l_conv1 = voxnet.layers.Conv3dMMLayer(
+                input_layer = l_in,
+                num_filters = params['num_filters'],
+                filter_size = [5,5,5],
+                border_mode = 'valid',
+                strides = [2,2,2],
+                W = voxnet.init.Prelu(),
+                nonlinearity = voxnet.activations.leaky_relu_01,
+                name =  'conv1'
+            )
+        l_drop1 = lasagne.layers.DropoutLayer(
+            incoming = l_conv1,
+            p = params['drop1p'],
+            name = 'drop1'
+            )
+        l_conv2 = voxnet.layers.Conv3dMMLayer(
+            input_layer = l_drop1,
+            num_filters = params['num_filters'],
+            filter_size = [3,3,3],
             border_mode = 'valid',
-            strides = [2,2,2],
             W = voxnet.init.Prelu(),
             nonlinearity = voxnet.activations.leaky_relu_01,
-            name =  'conv1'
-        )
-    l_drop1 = lasagne.layers.DropoutLayer(
-        incoming = l_conv1,
-        p = params['drop1p'],
-        name = 'drop1'
-        )
-    l_conv2 = voxnet.layers.Conv3dMMLayer(
-        input_layer = l_drop1,
-        num_filters = 32,
-        filter_size = [3,3,3],
-        border_mode = 'valid',
-        W = voxnet.init.Prelu(),
-        nonlinearity = voxnet.activations.leaky_relu_01,
-        name = 'conv2'
-        )
-    l_pool2 = voxnet.layers.MaxPool3dLayer(
-        input_layer = l_conv2,
-        pool_shape = [2,2,2],
-        name = 'pool2',
-        )
-    l_drop2 = lasagne.layers.DropoutLayer(
-        incoming = l_pool2,
-        p = params['drop2p'],
-        name = 'drop2',
-        )
-    l_fc1 = lasagne.layers.DenseLayer(
-        incoming = l_drop2,
-        num_units = 128,
-        W = lasagne.init.Normal(std=0.01),
-        name =  'fc1'
-        )
-    l_drop3 = lasagne.layers.DropoutLayer(
-        incoming = l_fc1,
-        p = params['drop3p'],
-        name = 'drop3',
-        )
-    l_fc2 = lasagne.layers.DenseLayer(
-        incoming = l_drop3,
-        num_units = n_classes,
-        W = lasagne.init.Normal(std = 0.01),
-        nonlinearity = None,
-        name = 'fc2'
-        )
+            name = 'conv2'
+            )
+        l_pool2 = voxnet.layers.MaxPool3dLayer(
+            input_layer = l_conv2,
+            pool_shape = [2,2,2],
+            name = 'pool2',
+            )
+        l_drop2 = lasagne.layers.DropoutLayer(
+            incoming = l_pool2,
+            p = params['drop2p'],
+            name = 'drop2',
+            )
+        l_fc1 = lasagne.layers.DenseLayer(
+            incoming = l_drop2,
+            num_units = params['num_units'],
+            W = lasagne.init.Normal(std=0.01),
+            name =  'fc1'
+            )
+        l_drop3 = lasagne.layers.DropoutLayer(
+            incoming = l_fc1,
+            p = params['drop3p'],
+            name = 'drop3',
+            )
+        l_fc2 = lasagne.layers.DenseLayer(
+            incoming = l_drop3,
+            num_units = n_classes,
+            W = lasagne.init.Normal(std = 0.01),
+            nonlinearity = None,
+            name = 'fc2'
+            )
+        
+        model = {'l_in':l_in, 'l_out':l_fc2}
+
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s| %(message)s')
+        logging.info('Metrics will be saved to {}'.format(args.metrics_fname))
+        mlog = voxnet.metrics_logging.MetricsLogger(args.metrics_fname, reinitialize=True)
+
+        logging.info('Compiling theano functions...')
+        tfuncs, tvars = make_training_functions(cfg, model)
+
+        logging.info('Training...')
+        itr = 0
+        last_checkpoint_itr = 0
+        loader = (data_loader(cfg, args.training_fname,lim=params['debug_c']))
+        for epoch in xrange(cfg['max_epochs']):
+            loader = (data_loader(cfg, args.training_fname,lim=params['debug_c']))
+
+            for x_shared, y_shared in loader:
+                num_batches = len(x_shared)//cfg['batch_size']
+                tvars['X_shared'].set_value(x_shared, borrow=True)
+                tvars['y_shared'].set_value(y_shared, borrow=True)
+                lvs,accs = [],[]
+                for bi in xrange(num_batches):
+                    lv = tfuncs['update_iter'](bi)
+                    lvs.append(lv)
+                    acc = 1.0-tfuncs['error_rate'](bi)
+                    accs.append(acc)
+                    itr += 1
+                loss, acc = float(np.mean(lvs)), float(np.mean(acc))
+                logging.info('epoch: {}, itr: {}, loss: {}, acc: {}'.format(epoch, itr, loss, acc))
+                mlog.log(epoch=epoch, itr=itr, loss=loss, acc=acc)
+                
+                if isinstance(cfg['learning_rate'], dict) and itr > 0:
+                    keys = sorted(cfg['learning_rate'].keys())
+                    new_lr = cfg['learning_rate'][keys[np.searchsorted(keys, itr)-1]]
+                    lr = np.float32(tvars['learning_rate'].get_value())
+                    if not np.allclose(lr, new_lr):
+                        logging.info('decreasing learning rate from {} to {}'.format(lr, new_lr))
+                        tvars['learning_rate'].set_value(np.float32(new_lr))
+                if itr-last_checkpoint_itr > cfg['checkpoint_every_nth']:
+                    voxnet.checkpoints.save_weights(args.weights_fname, model['l_out'],
+                                                    {'itr': itr, 'ts': time.time()})
+                    last_checkpoint_itr = itr
+
+
+        logging.info('training done')
+        voxnet.checkpoints.save_weights(args.weights_fname, model['l_out'],
+                                        {'itr': itr, 'ts': time.time()})
+        return {'loss': loss, 'status': STATUS_OK}
+    except:
+        traceback.print_exc()
+        return {'loss': np.nan, 'status': STATUS_FAIL}
+        
+        
     
-    model = {'l_in':l_in, 'l_out':l_fc2}
-
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s| %(message)s')
-    logging.info('Metrics will be saved to {}'.format(args.metrics_fname))
-    mlog = voxnet.metrics_logging.MetricsLogger(args.metrics_fname, reinitialize=True)
-
-    logging.info('Compiling theano functions...')
-    tfuncs, tvars = make_training_functions(cfg, model)
-
-    logging.info('Training...')
-    itr = 0
-    last_checkpoint_itr = 0
-    loader = (data_loader(cfg, args.training_fname))
-    for epoch in xrange(cfg['max_epochs']):
-        loader = (data_loader(cfg, args.training_fname))
-
-        for x_shared, y_shared in loader:
-            num_batches = len(x_shared)//cfg['batch_size']
-            tvars['X_shared'].set_value(x_shared, borrow=True)
-            tvars['y_shared'].set_value(y_shared, borrow=True)
-            lvs,accs = [],[]
-            for bi in xrange(num_batches):
-                lv = tfuncs['update_iter'](bi)
-                lvs.append(lv)
-                acc = 1.0-tfuncs['error_rate'](bi)
-                accs.append(acc)
-                itr += 1
-            loss, acc = float(np.mean(lvs)), float(np.mean(acc))
-            logging.info('epoch: {}, itr: {}, loss: {}, acc: {}'.format(epoch, itr, loss, acc))
-            mlog.log(epoch=epoch, itr=itr, loss=loss, acc=acc)
-            
-            if isinstance(cfg['learning_rate'], dict) and itr > 0:
-                keys = sorted(cfg['learning_rate'].keys())
-                new_lr = cfg['learning_rate'][keys[np.searchsorted(keys, itr)-1]]
-                lr = np.float32(tvars['learning_rate'].get_value())
-                if not np.allclose(lr, new_lr):
-                    logging.info('decreasing learning rate from {} to {}'.format(lr, new_lr))
-                    tvars['learning_rate'].set_value(np.float32(new_lr))
-            if itr-last_checkpoint_itr > cfg['checkpoint_every_nth']:
-                voxnet.checkpoints.save_weights(args.weights_fname, model['l_out'],
-                                                {'itr': itr, 'ts': time.time()})
-                last_checkpoint_itr = itr
-
-
-    logging.info('training done')
-    voxnet.checkpoints.save_weights(args.weights_fname, model['l_out'],
-                                    {'itr': itr, 'ts': time.time()})
-                                    
-    return {'loss': loss, 'status': STATUS_OK}
 
 
 if __name__=='__main__':
    
 
     fspace = {
-        'lr_0': hp.uniform('lr_0', 0.0001, 0.001),
-        'lr_60k': hp.uniform('lr_60k', 0.0001, 0.1),
-        'lr_400k': hp.uniform('lr_400k', 0.0001, 0.1),
-        'lr_600k': hp.uniform('lr_600k', 0.0001, 0.1),
+        'lr_0': hp.uniform('lr_0', 0.0001, 0.01),
+        'lr_60k': hp.uniform('lr_60k', 0.0001, 0.01),
+        'lr_400k': hp.uniform('lr_400k', 0.0001, 0.01),
+        'lr_600k': hp.uniform('lr_600k', 0.0001, 0.01),
         'reg': hp.uniform('reg',0.0001,0.01),
-        'momentum': hp.uniform('momentum',0.9,0.1),
-        'max_epochs': hp.choice('max_epochs',range(2,4,2)),
+        'momentum': hp.choice('momentum',[0.3,0.5,0.7,0.9]),
+        'max_epochs': hp.choice('max_epochs',[5]),
         'drop1p': hp.uniform('drop1p',0.9,0.1),
         'drop2p': hp.uniform('drop2p',0.9,0.1),
         'drop3p': hp.uniform('drop3p',0.9,0.1),
+        'num_filters': hp.choice('num_filters',[32,16,64,128]),
+        'num_units': hp.choice('num_units',[32,16,64,128,256]),        
+        'debug_c': hp.choice('debug_c',[4,20,40]),
     }
 
     trials = Trials()
-    best = fmin(fn=f, space=fspace, algo=tpe.suggest, max_evals=50, trials=trials)
+    best = fmin(fn=f, space=fspace, algo=tpe.suggest, max_evals=100, trials=trials)
     print('best',best)
