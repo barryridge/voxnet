@@ -286,13 +286,13 @@ if __name__=='__main__':
         'lr_600k': hp.uniform('lr_600k', 0.0001, 0.01),
         'reg': hp.uniform('reg',0.0001,0.01),
         'momentum': hp.choice('momentum',[0.3,0.5,0.7,0.9]),
-        'max_epochs': hp.choice('max_epochs',[5]),
+        'max_epochs': hp.choice('max_epochs',[3]),
         'drop1p': hp.uniform('drop1p',0.9,0.1),
         'drop2p': hp.uniform('drop2p',0.9,0.1),
         'drop3p': hp.uniform('drop3p',0.9,0.1),
         'num_filters': hp.choice('num_filters',[32,16,64,128]),
         'num_units': hp.choice('num_units',[32,16,64,128,256]),        
-        'debug_c': hp.choice('debug_c',[4,20,40]),
+        'debug_c': hp.choice('debug_c',[4,]),
     }
 
     trials = Trials()
