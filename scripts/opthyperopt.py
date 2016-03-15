@@ -147,14 +147,14 @@ def f(params):
                         600000: params['lr_600k'],
                         }
 
-        cfg = {'batch_size' : 32,
+        cfg = {'batch_size' : params['batch_size'],
                'learning_rate' : lr_schedule,
                'reg' : params['reg'],
                'momentum' : params['momentum'],
                'dims' : (32, 32, 32),
                'n_channels' : 1,
                'n_classes' : 10,
-               'batches_per_chunk': 64,
+               'batches_per_chunk': params['batches_per_chunk'],
                'max_epochs' : params['max_epochs'],
                'max_jitter_ij' : 2,
                'max_jitter_k' : 2,
@@ -276,9 +276,7 @@ def f(params):
     
 
 
-if __name__=='__main__':
-   
-
+if __name__=='__main__':   
     fspace = {
         'lr_0': hp.uniform('lr_0', 0.0001, 0.01),
         'lr_60k': hp.uniform('lr_60k', 0.0001, 0.01),
@@ -287,14 +285,16 @@ if __name__=='__main__':
         'reg': hp.uniform('reg',0.0001,0.01),
         'momentum': hp.choice('momentum',[0.3,0.5,0.7,0.9]),
         'max_epochs': hp.choice('max_epochs',[3]),
-        'drop1p': hp.uniform('drop1p',0.9,0.1),
-        'drop2p': hp.uniform('drop2p',0.9,0.1),
-        'drop3p': hp.uniform('drop3p',0.9,0.1),
-        'num_filters': hp.choice('num_filters',[32,16,64,128]),
-        'num_units': hp.choice('num_units',[32,16,64,128,256]),        
-        'debug_c': hp.choice('debug_c',[4,]),
+        'drop1p': hp.uniform('drop1p',0.1,0.9),
+        'drop2p': hp.uniform('drop2p',0.1,0.9),
+        'drop3p': hp.uniform('drop3p',0.1,0.9),
+        'num_filters': hp.choice('num_filters',[4,16,32]),
+        'num_units': hp.choice('num_units',[16,128]),        
+        'batches_per_chunk': hp.choice('batches_per_chunk',[32]),
+        'batch_size': hp.choice('batch_size',[16]),
+        'debug_c': hp.choice('debug_c',[2,]),
     }
 
     trials = Trials()
-    best = fmin(fn=f, space=fspace, algo=tpe.suggest, max_evals=100, trials=trials)
+    best = fmin(fn=f, space=fspace, algo=tpe.suggest, max_evals=50, trials=trials)
     print('best',best)
