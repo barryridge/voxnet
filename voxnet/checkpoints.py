@@ -35,9 +35,11 @@ def save_weights(fname, l_out, metadata=None):
                 try_num += 1
                 time.sleep(try_num)
                 logging.warning('file {} in use, waiting...{}'.format(fname,try_num))
-                
-    np.savez_compressed(str(fname), **param_dict)
-    logging.info('weights saved to file {}'.format((fname,)))
+    try:
+        np.savez_compressed(str(fname), **param_dict)
+        logging.info('weights saved to file {}'.format((fname,)))
+    except:
+        logging.info('weights not saved!!')
 
 def load_weights(fname, l_out):
     params = lasagne.layers.get_all_params(l_out)
